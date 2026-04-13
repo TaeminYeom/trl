@@ -356,8 +356,6 @@ class VLLMGeneration:
                 logprobs_mode="processed_logprobs",
                 quantization=quantization,
             )
-            if self.enable_sleep_mode:
-                self.llm.sleep(level=2)
         else:
             raise ValueError(f"vllm_mode must be either 'server' or 'colocate', got '{self.mode}'.")
 
@@ -365,6 +363,16 @@ class VLLMGeneration:
         # desynchronization and seems to lead to DeepSpeed hanging during initialization. To prevent this, we
         # synchronize all processes after vLLM has been fully initialized.
         accelerator.wait_for_everyone()
+
+        # Sync weights from the training model to vLLM. vLLM loads the base model from disk, so without this
+        # step the vLLM weights would not reflect PEFT adapters or any other modifications made to the model
+        # before vLLM initialization. This ensures that vLLM is ready for generation immediately after init,
+        # including during eval_on_start or custom evaluate() methods that call generate() directly.
+        self.sync_weights()
+
+        # Return to sleep mode after initial sync to free GPU memory for training.
+        if self.mode == "colocate" and self.enable_sleep_mode:
+            self.llm.sleep(level=2)
 
     def _fix_param_name_to_vllm(self, name: str, extra_prefixes: list[str] | None = None) -> str:
         """Fix parameter name for vLLM compatibility."""

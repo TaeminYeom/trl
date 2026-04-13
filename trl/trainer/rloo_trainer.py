@@ -527,7 +527,7 @@ class RLOOTrainer(_BaseTrainer):
                 logprobs=None,  # we don't need logprobs from vLLM in RLOO
                 generation_kwargs=args.generation_kwargs,
             )
-            self._last_loaded_step = -1  # tag to avoid useless loading during grad accumulation
+            self._last_loaded_step = 0  # synced during VLLMGeneration init
         else:
             generation_kwargs = {
                 "max_new_tokens": self.max_completion_length,
